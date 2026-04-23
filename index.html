@@ -5,197 +5,334 @@
 <title>Store App</title>
 
 <style>
-body { font-family: Arial; background:#f4f4f4; padding:20px; }
-.header { display:flex; justify-content:center; gap:10px; }
-.logo { width:50px; }
-.container { max-width:500px; margin:auto; background:white; padding:20px; }
-.hidden { display:none; }
-input, button { width:100%; margin:5px 0; padding:10px; }
-table { width:100%; margin-top:20px; border-collapse: collapse; }
-th, td { border:1px solid #ccc; padding:10px; text-align:center; }
+body {
+  margin: 0;
+  font-family: Arial;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  width: 350px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+h2 { text-align: center; }
+
+input, button {
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+button {
+  background: #6c5ce7;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.link {
+  color: #6c5ce7;
+  cursor: pointer;
+  text-align: center;
+  display: block;
+}
+
+.hidden { display: none; }
+
+/* FORM UI */
+.form-group { position: relative; margin: 15px 0; }
+
+.form-group label {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  background: white;
+  padding: 0 5px;
+  color: #888;
+  transition: 0.3s;
+}
+
+.form-group input:focus + label,
+.form-group input:valid + label {
+  top: -8px;
+  font-size: 11px;
+  color: #6c5ce7;
+}
+
+.error { color: red; font-size: 12px; }
+.success input { border-color: green; }
+.error-state input { border-color: red; }
+
+/* Spinner */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+  border-top: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 </style>
 </head>
 
 <body>
 
-<header class="header">
-  <img src="logo.png" id="logo" class="logo">
-  <h2 id="storeName">My Store</h2>
-</header>
-
-<div class="container">
-
-<div id="auth">
-  <input id="username" placeholder="Username">
-  <input id="password" type="password" placeholder="Password">
-  <button onclick="register()">Register</button>
+<!-- LOGIN -->
+<div id="loginPage" class="card">
+  <h2>Login</h2>
+  <input id="loginUser" placeholder="Username">
+  <input id="loginPass" type="password" placeholder="Password">
   <button onclick="login()">Login</button>
+  <span class="link" onclick="showRegister()">Create account</span>
 </div>
 
-<div id="dashboard" class="hidden">
-  <button onclick="logout()">Logout</button>
+<!-- REGISTER -->
+<div id="registerPage" class="card hidden">
+  <h2>Create Account</h2>
 
-  <h3>Store Settings</h3>
-  <input placeholder="Store Name" oninput="changeStoreName(this.value)">
-  <input type="file" onchange="uploadLogo(event)">
+  <form id="registerForm">
 
-  <h3>Add Product</h3>
-  <input id="productName" placeholder="Name">
+    <div class="form-group">
+      <input id="firstName" required>
+      <label>First Name</label>
+      <small class="error"></small>
+    </div>
+
+    <div class="form-group">
+      <input id="lastName" required>
+      <label>Last Name</label>
+      <small class="error"></small>
+    </div>
+
+    <div class="form-group">
+      <input id="email" required>
+      <label>Email</label>
+      <small class="error"></small>
+    </div>
+
+    <div class="form-group">
+      <input id="phone" required>
+      <label>Phone</label>
+      <small class="error"></small>
+    </div>
+
+    <div class="form-group">
+      <input id="regUser" required>
+      <label>Username</label>
+    </div>
+
+    <div class="form-group">
+      <input id="regPass" type="password" required>
+      <label>Password</label>
+      <small class="error"></small>
+    </div>
+
+    <button id="submitBtn" type="submit">
+      <span class="btn-text">Create Account</span>
+      <span class="spinner hidden"></span>
+    </button>
+
+  </form>
+
+  <span class="link" onclick="showLogin()">Back to login</span>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="card hidden">
+  <h2>Inventory</h2>
+
+  <input id="productName" placeholder="Product Name">
   <input id="productPrice" type="number" placeholder="Price">
-  <input id="productQty" type="number" placeholder="Quantity">
-  <button onclick="saveProduct()">Save</button>
+  <input id="productQty" type="number" placeholder="Qty">
 
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th><th>Price</th><th>Qty</th><th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="productTable"></tbody>
-  </table>
-</div>
+  <button onclick="saveProduct()">Add</button>
 
+  <div id="productList"></div>
+
+  <span class="link" onclick="logout()">Logout</span>
 </div>
 
 <script>
-const API = "http://localhost:3000"; // change after deploy
-let editId = null;
 
-async function register() {
-  await fetch(API + "/register", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({
-      username: username.value,
-      password: password.value
-    })
-  });
-  alert("Registered");
+const API = "https://store-backend-1-lxpa.onrender.com";
+
+/* ELEMENTS */
+const loginPage = document.getElementById("loginPage");
+const registerPage = document.getElementById("registerPage");
+const dashboard = document.getElementById("dashboard");
+
+const form = document.getElementById("registerForm");
+const btn = document.getElementById("submitBtn");
+const spinner = btn.querySelector(".spinner");
+const text = btn.querySelector(".btn-text");
+
+/* NAVIGATION */
+function showRegister(){
+  loginPage.classList.add("hidden");
+  registerPage.classList.remove("hidden");
 }
 
+function showLogin(){
+  registerPage.classList.add("hidden");
+  loginPage.classList.remove("hidden");
+}
+
+/* LOGIN */
 async function login() {
   const res = await fetch(API + "/login", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      username: username.value,
-      password: password.value
+      username: loginUser.value,
+      password: loginPass.value
     })
   });
 
   const data = await res.json();
 
-  if (data.token) {
-    localStorage.setItem("token", data.token);
-    auth.classList.add("hidden");
-    dashboard.classList.remove("hidden");
-    loadProducts();
+  localStorage.setItem("token", data.token);
+
+  loginPage.classList.add("hidden");
+  dashboard.classList.remove("hidden");
+
+  loadProducts();
+}
+
+/* REGISTER + AUTO LOGIN */
+async function register() {
+
+  const user = regUser.value;
+  const pass = regPass.value;
+
+  await fetch(API + "/register", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      username: user,
+      password: pass,
+      firstName: firstName.value,
+      lastName: lastName.value,
+      email: email.value,
+      phone: phone.value
+    })
+  });
+
+  const res = await fetch(API + "/login", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ username: user, password: pass })
+  });
+
+  const data = await res.json();
+
+  localStorage.setItem("token", data.token);
+
+  registerPage.classList.add("hidden");
+  dashboard.classList.remove("hidden");
+
+  loadProducts();
+}
+
+/* VALIDATION */
+function validateInput(input, regex, message) {
+  const group = input.parentElement;
+  const error = group.querySelector(".error");
+
+  if (!regex.test(input.value.trim())) {
+    group.classList.add("error-state");
+    error.textContent = message;
+  } else {
+    group.classList.remove("error-state");
+    error.textContent = "";
   }
 }
 
-async function loadProducts() {
+form.addEventListener("submit", async function(e){
+  e.preventDefault();
+
+  validateInput(firstName,/^[A-Za-z]+$/,"Letters only");
+  validateInput(lastName,/^[A-Za-z]+$/,"Letters only");
+  validateInput(email,/^[^ ]+@(gmail\.com|icloud\.com)$/,"Invalid email");
+  validateInput(phone,/^\+234\d{10}$/,"Invalid phone");
+  validateInput(regPass,/^(?=.*[A-Za-z])(?=.*\d).{8,}$/,"Weak password");
+
+  if (document.querySelectorAll(".error-state").length > 0) return;
+
+  btn.disabled = true;
+  spinner.classList.remove("hidden");
+
+  await register();
+
+  btn.disabled = false;
+  spinner.classList.add("hidden");
+});
+
+/* PRODUCTS */
+async function loadProducts(){
   const res = await fetch(API + "/products", {
-    headers:{ Authorization: localStorage.getItem("token") }
+    headers: { Authorization: localStorage.getItem("token") }
   });
 
-  const products = await res.json();
-  productTable.innerHTML = "";
+  const data = await res.json();
 
-  products.forEach(p => {
-    productTable.innerHTML += `
-      <tr>
-        <td>${p.name}</td>
-        <td>${p.price}</td>
-        <td>${p.qty}</td>
-        <td>
-          <button onclick='editProduct(${JSON.stringify(p)})'>Edit</button>
-          <button onclick='deleteProduct("${p._id}")'>Delete</button>
-        </td>
-      </tr>
+  productList.innerHTML = "";
+
+  data.forEach(p => {
+    productList.innerHTML += `
+      <div>
+        <b>${p.name}</b> - ₦${p.price} (Qty: ${p.qty})
+      </div>
     `;
   });
 }
 
-async function saveProduct() {
-  const token = localStorage.getItem("token");
-
-  const data = {
-    name: productName.value,
-    price: productPrice.value,
-    qty: productQty.value
-  };
-
-  if (editId) {
-    await fetch(API + "/products/" + editId, {
-      method:"PUT",
-      headers:{
-        "Content-Type":"application/json",
-        Authorization: token
-      },
-      body: JSON.stringify(data)
-    });
-    editId = null;
-  } else {
-    await fetch(API + "/products", {
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        Authorization: token
-      },
-      body: JSON.stringify(data)
-    });
-  }
-
-  loadProducts();
-}
-
-function editProduct(p) {
-  productName.value = p.name;
-  productPrice.value = p.price;
-  productQty.value = p.qty;
-  editId = p._id;
-}
-
-async function deleteProduct(id) {
-  await fetch(API + "/products/" + id, {
-    method:"DELETE",
-    headers:{ Authorization: localStorage.getItem("token") }
+async function saveProduct(){
+  await fetch(API + "/products", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: localStorage.getItem("token")
+    },
+    body: JSON.stringify({
+      name: productName.value,
+      price: productPrice.value,
+      qty: productQty.value
+    })
   });
+
   loadProducts();
 }
 
-function logout() {
+function logout(){
   localStorage.removeItem("token");
   location.reload();
 }
 
-function changeStoreName(name) {
-  storeName.innerText = name;
-  localStorage.setItem("storeName", name);
-}
-
-function uploadLogo(e) {
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    logo.src = evt.target.result;
-    localStorage.setItem("logo", evt.target.result);
-  };
-  reader.readAsDataURL(e.target.files[0]);
-}
-
+/* AUTO LOGIN */
 window.onload = () => {
   if (localStorage.getItem("token")) {
-    auth.classList.add("hidden");
+    loginPage.classList.add("hidden");
     dashboard.classList.remove("hidden");
     loadProducts();
   }
-
-  let name = localStorage.getItem("storeName");
-  if (name) storeName.innerText = name;
-
-  let logoData = localStorage.getItem("logo");
-  if (logoData) logo.src = logoData;
 };
+
 </script>
 
 </body>
