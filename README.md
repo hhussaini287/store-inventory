@@ -1,2 +1,1 @@
-# store-backend
-webstore backend
+store inventory
