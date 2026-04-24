@@ -1,130 +1,126 @@
+require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
-const app = express(); 
-
+const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI; 
-const JWT_SECRET = process.env.JWT_SECRET || "secret123";
-
-app.use(cors({
-  origin: "*"
-}));
 
 app.use(express.json());
 
-mongoose.connect(MONGO_URI)
-.then(() => console.log("MongoDB connected"))
-.catch(err => console.log(err));
+app.use(
+  cors({
+    origin: "https://storewebinventory.netlify.app"
+  })
+);
 
-const UserSchema = new mongoose.Schema({
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => console.log(err));
+
+const User = mongoose.model("User", {
   username: String,
-  password: String,
-  firstName: String,
-  lastName: String,
-  email: String,
-  phone: String
+  password: String
 });
 
-const ProductSchema = new mongoose.Schema({
+const Product = mongoose.model("Product", {
   name: String,
   price: Number,
   qty: Number,
   userId: String
 });
 
-const User = mongoose.model("User", UserSchema);
-const Product = mongoose.model("Product", ProductSchema);
+app.post("/register", async (req, res) => {
+  const { username, password } = req.body;
+
+  const hashed = await bcrypt.hash(password, 10);
+  const user = new User({
+    username,
+    password: hashed
+  });
+
+  await user.save();
+  res.json({ message: "User created" });
+});
+
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  const user = await User.findOne({ username });
+
+  if (!user) {
+    return res.status(400).json({ error: "User not found" });
+  }
+
+  const valid = await bcrypt.compare(password, user.password);
+
+  if (!valid) {
+    return res.status(400).json({ error: "Wrong password" });
+  }
+
+  const token = jwt.sign(
+    { id: user._id },
+    process.env.JWT_SECRET
+  );
+
+  res.json({ token });
+});
 
 function auth(req, res, next) {
   const token = req.headers.authorization;
 
-  if (!token) return res.status(401).send("No token");
+  if (!token) {
+    return res.status(401).json({ error: "No token" });
+  }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.id;
+    const verified = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    req.user = verified;
     next();
   } catch {
-    res.status(401).send("Invalid token");
+    res.status(401).json({ error: "Invalid token" });
   }
 }
 
-app.post("/register", async (req, res) => {
-  try {
-    const { username, password, firstName, lastName, email, phone } = req.body;
+app.post("/products", auth, async (req, res) => {
+  const product = new Product({
+    ...req.body,
+    userId: req.user.id
+  });
 
-    const existing = await User.findOne({ username });
-    if (existing) return res.status(400).send("User already exists");
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    const user = new User({
-      username,
-      password: hashed,
-      firstName,
-      lastName,
-      email,
-      phone
-    });
-
-    await user.save();
-
-    res.send("User registered");
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Server error");
-  }
-});
-
-app.post("/login", async (req, res) => {
-  try {
-    const { username, password } = req.body;
-
-    const user = await User.findOne({ username });
-    if (!user) return res.status(400).send("Invalid credentials");
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).send("Invalid credentials");
-
-    const token = jwt.sign({ id: user._id }, JWT_SECRET);
-
-    res.json({ token });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Server error");
-  }
+  await product.save();
+  res.json(product);
 });
 
 app.get("/products", auth, async (req, res) => {
-  try {
-    const products = await Product.find({ userId: req.userId });
-    res.json(products);
-  } catch {
-    res.status(500).send("Error fetching products");
-  }
+  const products = await Product.find({
+    userId: req.user.id
+  });
+
+  res.json(products);
 });
 
-app.post("/products", auth, async (req, res) => {
-  try {
-    const { name, price, qty } = req.body;
+app.put("/products/:id", auth, async (req, res) => {
+  const updated = await Product.findByIdAndUpdate(
+    req.params.id,
+    req.body,
+    { new: true }
+  );
 
-    const product = new Product({
-      name,
-      price,
-      qty,
-      userId: req.userId
-    });
+  res.json(updated);
+});
 
-    await product.save();
-
-    res.send("Product added");
-  } catch {
-    res.status(500).send("Error saving product");
-  }
+app.delete("/products/:id", auth, async (req, res) => {
+  await Product.findByIdAndDelete(req.params.id);
+  res.json({ message: "Deleted" });
 });
 
 app.listen(PORT, () => {
