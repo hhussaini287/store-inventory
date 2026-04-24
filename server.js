@@ -4,26 +4,22 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
-const app = express(); // ✅ MUST COME BEFORE app.use()
+const app = express(); 
 
-/* ================== CONFIG ================== */
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI; // from Render env
+const MONGO_URI = process.env.MONGO_URI; 
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 
-/* ================== MIDDLEWARE ================== */
 app.use(cors({
   origin: "*"
 }));
 
 app.use(express.json());
 
-/* ================== DATABASE ================== */
 mongoose.connect(MONGO_URI)
 .then(() => console.log("MongoDB connected"))
 .catch(err => console.log(err));
 
-/* ================== MODELS ================== */
 const UserSchema = new mongoose.Schema({
   username: String,
   password: String,
@@ -43,7 +39,6 @@ const ProductSchema = new mongoose.Schema({
 const User = mongoose.model("User", UserSchema);
 const Product = mongoose.model("Product", ProductSchema);
 
-/* ================== AUTH MIDDLEWARE ================== */
 function auth(req, res, next) {
   const token = req.headers.authorization;
 
@@ -58,9 +53,6 @@ function auth(req, res, next) {
   }
 }
 
-/* ================== ROUTES ================== */
-
-/* REGISTER */
 app.post("/register", async (req, res) => {
   try {
     const { username, password, firstName, lastName, email, phone } = req.body;
@@ -88,7 +80,6 @@ app.post("/register", async (req, res) => {
   }
 });
 
-/* LOGIN */
 app.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -108,7 +99,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/* GET PRODUCTS */
 app.get("/products", auth, async (req, res) => {
   try {
     const products = await Product.find({ userId: req.userId });
@@ -118,7 +108,6 @@ app.get("/products", auth, async (req, res) => {
   }
 });
 
-/* ADD PRODUCT */
 app.post("/products", auth, async (req, res) => {
   try {
     const { name, price, qty } = req.body;
@@ -138,7 +127,6 @@ app.post("/products", auth, async (req, res) => {
   }
 });
 
-/* ================== SERVER ================== */
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
