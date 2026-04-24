@@ -1,102 +1,144 @@
-require("dotenv").config();
-
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 
-const PORT = process.env.Port || 3000;
+const app = express(); // ✅ MUST COME BEFORE app.use()
 
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+/* ================== CONFIG ================== */
+const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI; // from Render env
+const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 
-const app = express();
-app.use(express.json());
+/* ================== MIDDLEWARE ================== */
 app.use(cors({
-  origin: "https://storewebinventory.netlify.app"
-}))
+  origin: "*"
+}));
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log(err));
+app.use(express.json());
 
-const User = mongoose.model("User", {
+/* ================== DATABASE ================== */
+mongoose.connect(MONGO_URI)
+.then(() => console.log("MongoDB connected"))
+.catch(err => console.log(err));
+
+/* ================== MODELS ================== */
+const UserSchema = new mongoose.Schema({
   username: String,
-  password: String
+  password: String,
+  firstName: String,
+  lastName: String,
+  email: String,
+  phone: String
 });
 
-const Product = mongoose.model("Product", {
+const ProductSchema = new mongoose.Schema({
   name: String,
   price: Number,
   qty: Number,
   userId: String
 });
 
-app.post("/register", async (req, res) => {
-  const { username, password } = req.body;
+const User = mongoose.model("User", UserSchema);
+const Product = mongoose.model("Product", ProductSchema);
 
-  const hashed = await bcrypt.hash(password, 10);
-  const user = new User({ username, password: hashed });
-
-  await user.save();
-  res.json({ message: "User created" });
-});
-
-app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-
-  const user = await User.findOne({ username });
-  if (!user) return res.status(400).json({ error: "User not found" });
-
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) return res.status(400).json({ error: "Wrong password" });
-
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-  res.json({ token });
-});
-
+/* ================== AUTH MIDDLEWARE ================== */
 function auth(req, res, next) {
   const token = req.headers.authorization;
-  if (!token) return res.status(401).json({ error: "No token" });
+
+  if (!token) return res.status(401).send("No token");
 
   try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified;
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.id;
     next();
   } catch {
-    res.status(401).json({ error: "Invalid token" });
+    res.status(401).send("Invalid token");
   }
 }
 
-app.post("/products", auth, async (req, res) => {
-  const product = new Product({
-    ...req.body,
-    userId: req.user.id
-  });
+/* ================== ROUTES ================== */
 
-  await product.save();
-  res.json(product);
+/* REGISTER */
+app.post("/register", async (req, res) => {
+  try {
+    const { username, password, firstName, lastName, email, phone } = req.body;
+
+    const existing = await User.findOne({ username });
+    if (existing) return res.status(400).send("User already exists");
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = new User({
+      username,
+      password: hashed,
+      firstName,
+      lastName,
+      email,
+      phone
+    });
+
+    await user.save();
+
+    res.send("User registered");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
 });
 
+/* LOGIN */
+app.post("/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    const user = await User.findOne({ username });
+    if (!user) return res.status(400).send("Invalid credentials");
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(400).send("Invalid credentials");
+
+    const token = jwt.sign({ id: user._id }, JWT_SECRET);
+
+    res.json({ token });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
+/* GET PRODUCTS */
 app.get("/products", auth, async (req, res) => {
-  const products = await Product.find({ userId: req.user.id });
-  res.json(products);
+  try {
+    const products = await Product.find({ userId: req.userId });
+    res.json(products);
+  } catch {
+    res.status(500).send("Error fetching products");
+  }
 });
 
-app.put("/products/:id", auth, async (req, res) => {
-  const updated = await Product.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  );
-  res.json(updated);
+/* ADD PRODUCT */
+app.post("/products", auth, async (req, res) => {
+  try {
+    const { name, price, qty } = req.body;
+
+    const product = new Product({
+      name,
+      price,
+      qty,
+      userId: req.userId
+    });
+
+    await product.save();
+
+    res.send("Product added");
+  } catch {
+    res.status(500).send("Error saving product");
+  }
 });
 
-app.delete("/products/:id", auth, async (req, res) => {
-  await Product.findByIdAndDelete(req.params.id);
-  res.json({ message: "Deleted" });
+/* ================== SERVER ================== */
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
-
-app.listen(process.env.PORT, () =>
-  console.log("Server running on port " + process.env.PORT)
-);
